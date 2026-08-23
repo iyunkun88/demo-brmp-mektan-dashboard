@@ -733,25 +733,56 @@
             alert("Parameter berhasil dikirim ke ESP32 via topik: " + controlTopic);
         }
 
-        function sendManualCommand(state) {
+       // Fungsi Kirim Manual Command (Relay 1/0)
+function sendManualCommand(state) {
     if (!client || !client.isConnected()) {
         alert("Gagal mengirim komando: MQTT belum terhubung!");
         return;
     }
 
-    // Format disesuaikan dengan ESP32 (1 = ON, 0 = OFF)
+    // Ambil topik yang dipilih dari dropdown (contoh: KP_Cicurug/GH03) + /control
+    const selectedTopic = document.getElementById('topic').value;
+    const controlTopic = `${selectedTopic}/control`; 
+
     const payloadObj = {
         mode: "MANUAL",
         relay: state ? 1 : 0
     };
 
-    const controlTopic = "esp32/irrigation/control";
     const message = new Paho.MQTT.Message(JSON.stringify(payloadObj));
     message.destinationName = controlTopic;
     client.send(message);
 
-    alert(`Sinyal Pompa ${state ? 'NYALA (1)' : 'MATI (0)'} telah dikirim ke ESP32.`);
+    console.log(`[Publish SUCCESS] Topic: ${controlTopic} | Data:`, payloadObj);
+    alert(`Sinyal Pompa ${state ? 'NYALA (1)' : 'MATI (0)'} terkirim ke: ${controlTopic}`);
 }
+
+    // Fungsi Kirim Parameter Auto
+    function publishIrrigationControl() {
+    if (!client || !client.isConnected()) {
+        alert("Gagal mengirim komando: MQTT belum terhubung!");
+        return;
+    }
+
+    const selectedTopic = document.getElementById('topic').value;
+    const controlTopic = `${selectedTopic}/control`;
+
+    let payloadObj = { mode: activeMode };
+
+    if (activeMode === 'AUTO_SENSOR') {
+        payloadObj.temp_max = parseFloat(document.getElementById('cfg-temp-max').value);
+        payloadObj.hum_min = parseFloat(document.getElementById('cfg-hum-min').value);
+    } else if (activeMode === 'AUTO_TIMER') {
+        payloadObj.interval_min = parseInt(document.getElementById('cfg-timer-interval').value);
+        payloadObj.duration_sec = parseInt(document.getElementById('cfg-timer-duration').value);
+    }
+
+    const message = new Paho.MQTT.Message(JSON.stringify(payloadObj));
+    message.destinationName = controlTopic;
+    client.send(message);
+
+    alert(`Parameter terkirim ke: ${controlTopic}`);
+    }
     </script>
 </body>
 </html>
