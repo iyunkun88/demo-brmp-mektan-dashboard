@@ -734,23 +734,24 @@
         }
 
         function sendManualCommand(state) {
-            if (!client || !client.isConnected()) {
-                alert("Gagal mengirim komando: MQTT belum terhubung!");
-                return;
-            }
+    if (!client || !client.isConnected()) {
+        alert("Gagal mengirim komando: MQTT belum terhubung!");
+        return;
+    }
 
-            const payloadObj = {
-                mode: "MANUAL",
-                pump_state: state ? "ON" : "OFF"
-            };
+    // Format disesuaikan dengan ESP32 (1 = ON, 0 = OFF)
+    const payloadObj = {
+        mode: "MANUAL",
+        relay: state ? 1 : 0
+    };
 
-            const controlTopic = "esp32/irrigation/control";
-            const message = new Paho.MQTT.Message(JSON.stringify(payloadObj));
-            message.destinationName = controlTopic;
-            client.send(message);
+    const controlTopic = "esp32/irrigation/control";
+    const message = new Paho.MQTT.Message(JSON.stringify(payloadObj));
+    message.destinationName = controlTopic;
+    client.send(message);
 
-            alert(`Sinyal Pompa ${state ? 'NYALA (ON)' : 'MATI (OFF)'} telah dikirim ke ESP32.`);
-        }
+    alert(`Sinyal Pompa ${state ? 'NYALA (1)' : 'MATI (0)'} telah dikirim ke ESP32.`);
+}
     </script>
 </body>
 </html>
