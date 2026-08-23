@@ -399,43 +399,47 @@
             });
 
             mqttClient.on('message', (topic, message) => {
-                try {
-                    const rawStr = message.toString();
-                    console.log("MQTT Received:", rawStr); // Untuk Cek Console F12
-                    const data = JSON.parse(rawStr);
+    try {
+        const rawStr = message.toString();
+        console.log("MQTT Received:", rawStr);
+        const data = JSON.parse(rawStr);
 
-                    // Multi-Key Support untuk Relay / Pompa
-                    if (data.relay !== undefined || data.PUMP !== undefined || data.pump !== undefined) {
-                        const state = data.relay ?? data.PUMP ?? data.pump;
-                        setPumpStatus(state === 1 || state === "1" || state === true || state === "ON");
-                    }
+        // Handling Status Aktuator (Relay / Pompa)
+        if (data.relay !== undefined || data.PUMP !== undefined || data.pump !== undefined) {
+            const state = data.relay ?? data.PUMP ?? data.pump;
+            setPumpStatus(state === 1 || state === "1" || state === true || state === "ON");
+        }
 
-                    // Multi-Key Support untuk Suhu & Kelembaban
-                    const temp = parseFloat(data.Suhu ?? data.suhu ?? data.temp ?? data.temperature ?? 0);
-                    const hum = parseFloat(data.Kelembaban ?? data.kelembaban ?? data.hum ?? data.humidity ?? 0);
+        // Handling Sensor Suhu & Kelembaban (Mendukung temp2 & hum2 dari ESP32 Anda)
+        const temp = parseFloat(data.temp2 ?? data.Suhu ?? data.suhu ?? data.temp ?? data.temperature ?? 0);
+        const hum = parseFloat(data.hum2 ?? data.Kelembaban ?? data.kelembaban ?? data.hum ?? data.humidity ?? 0);
 
-                    if (temp > 0 || hum > 0) {
-                        document.getElementById('val-temp').innerText = temp.toFixed(2);
-                        document.getElementById('val-hum').innerText = hum.toFixed(2);
+        if (temp > 0 || hum > 0) {
+            document.getElementById('val-temp').innerText = temp.toFixed(2);
+            document.getElementById('val-hum').innerText = hum.toFixed(2);
 
-                        const timeStr = `${new Date().toLocaleTimeString('id-ID')}, ${new Date().toLocaleDateString('id-ID')}`;
-                        document.getElementById('last-update').innerText = timeStr;
+            const timeStr = `${new Date().toLocaleTimeString('id-ID')}, ${new Date().toLocaleDateString('id-ID')}`;
+            document.getElementById('last-update').innerText = timeStr;
 
-                        const label = new Date().toLocaleTimeString('id-ID');
-                        chartTemp.data.labels.push(label);
-                        chartTemp.data.datasets[0].data.push(temp);
-                        if (chartTemp.data.labels.length > 30) { chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); }
-                        chartTemp.update();
+            const label = new Date().toLocaleTimeString('id-ID');
+            
+            // Update Grafik Suhu
+            chartTemp.data.labels.push(label);
+            chartTemp.data.datasets[0].data.push(temp);
+            if (chartTemp.data.labels.length > 30) { chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); }
+            chartTemp.update();
 
-                        chartHum.data.labels.push(label);
-                        chartHum.data.datasets[0].data.push(hum);
-                        if (chartHum.data.labels.length > 30) { chartHum.data.labels.shift(); chartHum.data.datasets[0].data.shift(); }
-                        chartHum.update();
+            // Update Grafik Kelembaban
+            chartHum.data.labels.push(label);
+            chartHum.data.datasets[0].data.push(hum);
+            if (chartHum.data.labels.length > 30) { chartHum.data.labels.shift(); chartHum.data.datasets[0].data.shift(); }
+            chartHum.update();
 
-                        saveToDB({ timestamp: timeStr, suhu: temp.toFixed(2), kelembaban: hum.toFixed(2) });
-                    }
-                } catch (e) { console.error("Error Parsing JSON:", e); }
-            });
+            // Simpan ke Database
+            saveToDB({ timestamp: timeStr, suhu: temp.toFixed(2), kelembaban: hum.toFixed(2) });
+        }
+    } catch (e) { console.error("Error Parsing JSON:", e); }
+});
         }
 
         function showError(msg) {
