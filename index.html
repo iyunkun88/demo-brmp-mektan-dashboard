@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Smart Irigasi BRMP Mektan</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -13,11 +12,8 @@
             theme: { extend: { colors: { brand: { 500: '#22c55e', 600: '#16a34a' } } } }
         }
     </script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- MQTT.js Modern Browser Bundle (Jauh lebih stabil dari Paho) -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen font-sans flex flex-col justify-between">
@@ -134,7 +130,10 @@
                     </div>
                 </div>
 
-                <div class="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                <!-- BOX MODE PANEL KONTROL -->
+                <div class="bg-gray-950/60 border border-gray-800 rounded-xl p-4 min-h-[120px]">
+                    
+                    <!-- PANEL AUTO SENSOR -->
                     <div id="panel-auto-sensor" class="space-y-3">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -149,6 +148,7 @@
                         <button onclick="publishIrrigationControl()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg">Simpan Parameter Auto Sensor</button>
                     </div>
 
+                    <!-- PANEL AUTO TIMER -->
                     <div id="panel-auto-timer" class="hidden space-y-3">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -163,10 +163,12 @@
                         <button onclick="publishIrrigationControl()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg">Simpan Parameter Auto Timer</button>
                     </div>
 
-                    <div id="panel-manual" class="hidden flex items-center gap-4">
-                        <button onclick="sendManualCommand(true)" class="px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white font-medium text-xs rounded-xl">NYALAKAN POMPA (ON)</button>
-                        <button onclick="sendManualCommand(false)" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium text-xs rounded-xl">MATIKAN POMPA (OFF)</button>
+                    <!-- PANEL MANUAL -->
+                    <div id="panel-manual" class="hidden flex items-center gap-4 pt-2">
+                        <button onclick="sendManualCommand(true)" class="px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white font-medium text-xs rounded-xl shadow-lg">NYALAKAN POMPA (ON)</button>
+                        <button onclick="sendManualCommand(false)" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium text-xs rounded-xl shadow-lg">MATIKAN POMPA (OFF)</button>
                     </div>
+
                 </div>
             </div>
 
@@ -264,7 +266,7 @@
         &copy; 2026 BRMP Mektan - Smart Irrigation System
     </footer>
 
-    <!-- LOGIKA UTAMA SCRIPT -->
+    <!-- SCRIPT REALTIME DATA & CONTROL -->
     <script>
         lucide.createIcons();
 
@@ -274,14 +276,14 @@
         let chartHum = null;
         let activeMode = 'AUTO_SENSOR';
 
-        // Clock Update
+        // Update Jam
         setInterval(() => {
             const now = new Date();
             document.getElementById('live-clock').innerText = now.toLocaleTimeString('id-ID');
             document.getElementById('live-date').innerText = now.toLocaleDateString('id-ID');
         }, 1000);
 
-        // IndexedDB
+        // Database Lokal Browser (IndexedDB)
         function initDB() {
             const req = indexedDB.open("BRMP_Irigasi_DB", 1);
             req.onupgradeneeded = (e) => {
@@ -344,7 +346,7 @@
             }
         }
 
-        // Charts
+        // Charts Init
         function initCharts() {
             const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { color: '#9ca3af' } } }, elements: { point: { radius: 0 } } };
             chartTemp = new Chart(document.getElementById('chartTemp'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#f97316', borderWidth: 2 }] }, options: opts });
@@ -352,7 +354,7 @@
         }
         initCharts();
 
-        // KONEKSI MQTT MEMAKAI MQTT.JS (WSS)
+        // KONEKSI MQTT
         function connectMQTT() {
             const host = document.getElementById('broker-url').value.trim();
             const port = 8884;
@@ -365,7 +367,6 @@
             document.getElementById('btn-connect-text').innerText = "Connecting...";
             document.getElementById('btn-connect-spinner').classList.remove('hidden');
 
-            // URL WebSocket TLS HiveMQ Cloud
             const connectUrl = `wss://${host}:${port}/mqtt`;
 
             mqttClient = mqtt.connect(connectUrl, {
@@ -374,7 +375,7 @@
                 password: password,
                 clean: true,
                 connectTimeout: 5000,
-                reconnectPeriod: 0 // Tidak auto-reconnect jika salah kredensial
+                reconnectPeriod: 0
             });
 
             mqttClient.on('connect', () => {
@@ -387,26 +388,31 @@
 
                 mqttClient.subscribe(topicSub);
                 mqttClient.subscribe("esp32/irrigation/control");
+
+                // Paksa render ulang UI mode setelah koneksi sukses
                 switchModeUI('AUTO_SENSOR');
             });
 
             mqttClient.on('error', (err) => {
-                showError("Gagal Koneksi: " + (err.message || "Cek Host / Kredensial"));
+                showError("Gagal Koneksi: " + (err.message || "Kredensial Salah"));
                 mqttClient.end();
             });
 
             mqttClient.on('message', (topic, message) => {
                 try {
-                    const data = JSON.parse(message.toString());
+                    const rawStr = message.toString();
+                    console.log("MQTT Received:", rawStr); // Untuk Cek Console F12
+                    const data = JSON.parse(rawStr);
 
-                    // Handling Aktuator Pompa
-                    if (data.relay !== undefined) {
-                        setPumpStatus(data.relay === 1 || data.relay === true);
+                    // Multi-Key Support untuk Relay / Pompa
+                    if (data.relay !== undefined || data.PUMP !== undefined || data.pump !== undefined) {
+                        const state = data.relay ?? data.PUMP ?? data.pump;
+                        setPumpStatus(state === 1 || state === "1" || state === true || state === "ON");
                     }
 
-                    // Handling Sensor Telemetri
-                    const temp = parseFloat(data.Suhu || data.temp || 0);
-                    const hum = parseFloat(data.Kelembaban || data.hum || 0);
+                    // Multi-Key Support untuk Suhu & Kelembaban
+                    const temp = parseFloat(data.Suhu ?? data.suhu ?? data.temp ?? data.temperature ?? 0);
+                    const hum = parseFloat(data.Kelembaban ?? data.kelembaban ?? data.hum ?? data.humidity ?? 0);
 
                     if (temp > 0 || hum > 0) {
                         document.getElementById('val-temp').innerText = temp.toFixed(2);
@@ -428,7 +434,7 @@
 
                         saveToDB({ timestamp: timeStr, suhu: temp.toFixed(2), kelembaban: hum.toFixed(2) });
                     }
-                } catch (e) { console.error("Format Payload JSON Rusak:", e); }
+                } catch (e) { console.error("Error Parsing JSON:", e); }
             });
         }
 
@@ -480,13 +486,21 @@
             lucide.createIcons();
         }
 
+        // FUNGSI GANTI UI MODE KONTROL
         function switchModeUI(mode) {
             activeMode = mode;
-            ['sensor', 'timer', 'manual'].forEach(m => {
-                document.getElementById(`btn-mode-${m}`).className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
-                document.getElementById(`panel-auto-${m}` || `panel-${m}`).classList.add('hidden');
-            });
 
+            // Reset Button Styles
+            document.getElementById('btn-mode-sensor').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
+            document.getElementById('btn-mode-timer').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
+            document.getElementById('btn-mode-manual').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
+
+            // Hide All Panels
+            document.getElementById('panel-auto-sensor').classList.add('hidden');
+            document.getElementById('panel-auto-timer').classList.add('hidden');
+            document.getElementById('panel-manual').classList.add('hidden');
+
+            // Show Selected Panel
             if (mode === 'AUTO_SENSOR') {
                 document.getElementById('btn-mode-sensor').className = "px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30";
                 document.getElementById('panel-auto-sensor').classList.remove('hidden');
@@ -510,7 +524,7 @@
                 payload.duration_sec = parseInt(document.getElementById('cfg-timer-duration').value);
             }
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
-            alert("Parameter Terkirim!");
+            alert("Parameter Irigasi Terkirim ke ESP32!");
         }
 
         function sendManualCommand(state) {
@@ -518,6 +532,7 @@
             const payload = { mode: "MANUAL", relay: state ? 1 : 0 };
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
             setPumpStatus(state);
+            alert(`Komando Pompa ${state ? 'ON' : 'OFF'} Terkirim!`);
         }
     </script>
 </body>
