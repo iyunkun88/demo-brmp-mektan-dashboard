@@ -89,7 +89,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-300 mb-1">Client ID (Web Unik)</label>
-                        <input type="text" id="client-id" required value="WEB_Dashboard_Client"
+                        <input type="text" id="client-id" required value="WEB_Dashboard_GH03"
                             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
                     </div>
                 </div>
@@ -204,7 +204,7 @@
             <!-- STATUS POMPA & CARDS MONITORING GRID -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                <!-- CARD STATUS POMPA (RELAY) BARU -->
+                <!-- CARD STATUS POMPA -->
                 <div id="card-pump-status" class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg relative overflow-hidden transition-all duration-300 flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
@@ -437,14 +437,16 @@
             const password = document.getElementById('password').value.trim();
             const topicSub = document.getElementById('topic').value.trim();
 
+            document.getElementById('auth-error').classList.add('hidden');
             document.getElementById('btn-connect-text').innerText = "Connecting...";
             document.getElementById('btn-connect-spinner').classList.remove('hidden');
 
-            client = new Paho.MQTT.Client(host, port, clientId);
+            // Paho Client Instantiation dengan path /mqtt khusus HiveMQ Cloud
+            client = new Paho.MQTT.Client(host, Number(port), "/mqtt", clientId);
             client.onConnectionLost = onConnectionLost;
             client.onMessageArrived = onMessageArrived;
 
-            client.connect({
+            const connectOptions = {
                 onSuccess: () => {
                     document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
                     document.getElementById('status-text').innerText = "Connected";
@@ -454,19 +456,30 @@
                     document.getElementById('btn-disconnect').classList.add('flex');
                     
                     client.subscribe(topicSub);
-                    client.subscribe("esp32/irrigation/control"); // Subscribe juga ke topik kontrol
+                    client.subscribe("esp32/irrigation/control");
                     switchModeUI('AUTO_SENSOR');
                 },
                 onFailure: (res) => {
-                    document.getElementById('auth-error').innerText = "Koneksi Gagal: " + res.errorMessage;
+                    document.getElementById('auth-error').innerText = "Gagal Terhubung: " + (res.errorMessage || "Koneksi Timeout / Kredensial Salah");
                     document.getElementById('auth-error').classList.remove('hidden');
                     document.getElementById('btn-connect-text').innerText = "Hubungkan ke Broker";
                     document.getElementById('btn-connect-spinner').classList.add('hidden');
                 },
                 userName: username,
                 password: password,
-                useSSL: true
-            });
+                useSSL: true,
+                timeout: 10,
+                cleanSession: true
+            };
+
+            try {
+                client.connect(connectOptions);
+            } catch (err) {
+                document.getElementById('auth-error').innerText = "Error: " + err.message;
+                document.getElementById('auth-error').classList.remove('hidden');
+                document.getElementById('btn-connect-text').innerText = "Hubungkan ke Broker";
+                document.getElementById('btn-connect-spinner').classList.add('hidden');
+            }
         }
 
         function onConnectionLost(res) {
@@ -475,13 +488,14 @@
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('auth-card').classList.remove('hidden');
             document.getElementById('btn-disconnect').classList.add('hidden');
+            document.getElementById('btn-connect-text').innerText = "Hubungkan ke Broker";
+            document.getElementById('btn-connect-spinner').classList.add('hidden');
         }
 
         function disconnectMQTT() {
             if (client && client.isConnected()) client.disconnect();
         }
 
-        // FUNGSI UPDATE STATUS POMPA VISUAL
         function setPumpStatus(isOn) {
             const card = document.getElementById('card-pump-status');
             const iconBg = document.getElementById('pump-icon-bg');
@@ -516,7 +530,6 @@
             try {
                 const data = JSON.parse(msg.payloadString);
 
-                // Cek status pompa dari payload JSON ESP32
                 if (data.relay !== undefined) {
                     setPumpStatus(data.relay === 1 || data.relay === "1" || data.relay === true);
                 } else if (data.PUMP !== undefined) {
@@ -525,7 +538,6 @@
                     setPumpStatus(data.pump_state === "ON" || data.pump_state === 1);
                 }
 
-                // Cek data sensor suhu & kelembaban
                 const temp = parseFloat(data.Suhu || data.temp2 || 0);
                 const hum = parseFloat(data.Kelembaban || data.hum2 || 0);
 
@@ -602,7 +614,6 @@
             msg.destinationName = "esp32/irrigation/control";
             client.send(msg);
 
-            // Update status pompa secara lokal di UI langsung
             setPumpStatus(state);
 
             alert(`Komando Pompa ${state ? 'ON' : 'OFF'} terkirim ke ESP32!`);
