@@ -522,26 +522,27 @@
             }
         }
 
-        function publishIrrigationControl() {
+       function publishIrrigationControl() {
             if (!mqttClient) return alert("MQTT Terputus!");
             let payload = { mode: activeMode };
+            
             if (activeMode === 'AUTO_SENSOR') {
                 payload.temp_max = parseFloat(document.getElementById('cfg-temp-max').value);
                 payload.hum_min = parseFloat(document.getElementById('cfg-hum-min').value);
             } else if (activeMode === 'AUTO_TIMER') {
-                payload.time_start = document.getElementById('cfg-time-start').value;
-                payload.time_end = document.getElementById('cfg-time-end').value;
+                payload.time_start = document.getElementById('cfg-time-start').value; // Jam "HH:MM"
+                payload.time_end = document.getElementById('cfg-time-end').value;     // Jam "HH:MM"
             }
+        
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
-            alert("Parameter Irigasi Terkirim ke ESP32!");
+            alert("Parameter Mode " + activeMode + " Terkirim ke ESP32!");
         }
-
+        
         function sendManualCommand(state) {
             if (!mqttClient) return alert("MQTT Terputus!");
             const payload = { mode: "MANUAL", relay: state ? 1 : 0 };
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
-            alert(`Komando Pompa ${state ? 'ON' : 'OFF'} Terkirim!`);
         }
-    </script>
+</script>
 </body>
 </html>
