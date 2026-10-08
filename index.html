@@ -22,7 +22,11 @@
     <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-3">
-               <img src="logo kementan.png" alt="Logo Kementan" class="h-10 w-auto object-contain">
+                <!-- LOGO KEMENTERIAN PERTANIAN WITH FALLBACK -->
+                <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kementerian_Pertanian_Republik_Indonesia.png" 
+                     onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Logo_Kementerian_Pertanian_Republik_Indonesia.png/320px-Logo_Kementerian_Pertanian_Republik_Indonesia.png';" 
+                     alt="Logo Kementan" 
+                     class="h-10 w-auto object-contain">
                 
                 <div class="p-2 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400">
                     <i data-lucide="sprout" class="w-6 h-6"></i>
@@ -172,6 +176,14 @@
                     </div>
 
                 </div>
+
+                <!-- SAFETY CUT-OFF / EMERGENCY RESET BUTTON -->
+                <div class="pt-2 border-t border-gray-800/80">
+                    <button onclick="sendResetSystem()" class="w-full py-2.5 px-4 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition-all">
+                        <i data-lucide="power-off" class="w-4 h-4"></i>
+                        RESET SISTEM (MATIKAN TOTAL FITUR IRIGASI)
+                    </button>
+                </div>
             </div>
 
             <!-- CARDS MONITORING -->
@@ -192,7 +204,7 @@
                         <span id="pump-indicator-dot" class="w-4 h-4 rounded-full bg-red-500"></span>
                         <span id="pump-status-text" class="text-3xl font-bold tracking-wider text-red-500">OFF</span>
                     </div>
-                    <p id="pump-subtext" class="text-xs text-gray-500 mt-3 font-mono">Pompa Siaga</p>
+                    <p id="pump-subtext" class="text-xs text-gray-500 mt-3 font-mono">Pompa / Valve Siaga</p>
                 </div>
 
                 <!-- SUHU -->
@@ -278,14 +290,14 @@
         let chartHum = null;
         let activeMode = 'AUTO_SENSOR';
 
-        // Update Jam
+        // Update Live Clock
         setInterval(() => {
             const now = new Date();
             document.getElementById('live-clock').innerText = now.toLocaleTimeString('id-ID');
             document.getElementById('live-date').innerText = now.toLocaleDateString('id-ID');
         }, 1000);
 
-        // Database Lokal Browser (IndexedDB)
+        // Database Lokal (IndexedDB)
         function initDB() {
             const req = indexedDB.open("BRMP_Irigasi_DB", 1);
             req.onupgradeneeded = (e) => {
@@ -388,12 +400,11 @@
                 document.getElementById('btn-disconnect').classList.remove('hidden');
                 document.getElementById('btn-disconnect').classList.add('flex');
 
-                // Subscribe topik sensor & kontrol/status
+                // Subscribe topik sensor & status feedback
                 mqttClient.subscribe(topicSub);
                 mqttClient.subscribe("esp32/irrigation/control");
                 mqttClient.subscribe("esp32/irrigation/status");
 
-                // Render UI awal
                 switchModeUI('AUTO_SENSOR');
             });
 
@@ -408,14 +419,25 @@
                     console.log("MQTT Received:", rawStr);
                     const data = JSON.parse(rawStr);
 
-                    // 1. SINKRONISASI STATUS VALVE/POMPA REALTIME (Mendukung Push Button Fisik/Manual Hardware)
+                    // A. INDIKATOR METRICS DEVICE ONLINE / OFFLINE (LWT Detection)
+                    if (data.device_status === "OFFLINE") {
+                        document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-ping";
+                        document.getElementById('status-text').innerText = "Device Offline (ESP32 Mati)";
+                        setPumpStatus(false);
+                        return;
+                    } else if (data.device_status === "ONLINE") {
+                        document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
+                        document.getElementById('status-text').innerText = "Connected";
+                    }
+
+                    // B. SINKRONISASI REALTIME STATUS VALVE / POMPA
                     const valveState = data.status_valve ?? data.valve ?? data.relay ?? data.PUMP ?? data.pump ?? data.status_pompa;
                     if (valveState !== undefined) {
                         const isActive = (valveState === 1 || valveState === "1" || valveState === true || valveState === "ON" || valveState === "on");
                         setPumpStatus(isActive);
                     }
 
-                    // 2. MONITORING TELEMETRI SENSOR
+                    // C. TELEMETRI SENSOR SUHU & KELEMBABAN
                     const temp = parseFloat(data.temp2 ?? data.Suhu ?? data.suhu ?? data.temp ?? data.temperature ?? 0);
                     const hum = parseFloat(data.hum2 ?? data.Kelembaban ?? data.kelembaban ?? data.hum ?? data.humidity ?? 0);
 
@@ -440,7 +462,7 @@
                         if (chartHum.data.labels.length > 30) { chartHum.data.labels.shift(); chartHum.data.datasets[0].data.shift(); }
                         chartHum.update();
 
-                        // Simpan ke Database
+                        // Simpan Datalogger
                         saveToDB({ timestamp: timeStr, suhu: temp.toFixed(2), kelembaban: hum.toFixed(2) });
                     }
                 } catch (e) { console.error("Error Parsing JSON:", e); }
@@ -495,21 +517,17 @@
             lucide.createIcons();
         }
 
-        // FUNGSI GANTI UI MODE KONTROL
         function switchModeUI(mode) {
             activeMode = mode;
 
-            // Reset Button Styles
             document.getElementById('btn-mode-sensor').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
             document.getElementById('btn-mode-timer').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
             document.getElementById('btn-mode-manual').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
 
-            // Hide All Panels
             document.getElementById('panel-auto-sensor').classList.add('hidden');
             document.getElementById('panel-auto-timer').classList.add('hidden');
             document.getElementById('panel-manual').classList.add('hidden');
 
-            // Show Selected Panel
             if (mode === 'AUTO_SENSOR') {
                 document.getElementById('btn-mode-sensor').className = "px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30";
                 document.getElementById('panel-auto-sensor').classList.remove('hidden');
@@ -522,27 +540,34 @@
             }
         }
 
-       function publishIrrigationControl() {
+        function publishIrrigationControl() {
             if (!mqttClient) return alert("MQTT Terputus!");
             let payload = { mode: activeMode };
-            
             if (activeMode === 'AUTO_SENSOR') {
                 payload.temp_max = parseFloat(document.getElementById('cfg-temp-max').value);
                 payload.hum_min = parseFloat(document.getElementById('cfg-hum-min').value);
             } else if (activeMode === 'AUTO_TIMER') {
-                payload.time_start = document.getElementById('cfg-time-start').value; // Jam "HH:MM"
-                payload.time_end = document.getElementById('cfg-time-end').value;     // Jam "HH:MM"
+                payload.time_start = document.getElementById('cfg-time-start').value;
+                payload.time_end = document.getElementById('cfg-time-end').value;
             }
-        
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
-            alert("Parameter Mode " + activeMode + " Terkirim ke ESP32!");
+            alert("Parameter Irigasi Terkirim ke ESP32!");
         }
-        
+
         function sendManualCommand(state) {
             if (!mqttClient) return alert("MQTT Terputus!");
             const payload = { mode: "MANUAL", relay: state ? 1 : 0 };
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
         }
-</script>
+
+        function sendResetSystem() {
+            if (!mqttClient) return alert("MQTT Terputus!");
+            if (confirm("Apakah Anda yakin ingin MEMATIKAN POMPA & MENONAKTIFKAN SELURUH FITUR OTOMATIS?")) {
+                const payload = { mode: "MANUAL", relay: 0, reset: true };
+                mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
+                alert("Perintah Reset Terkirim! Pompa Mati & Auto Mode Nonaktif.");
+            }
+        }
+    </script>
 </body>
 </html>
