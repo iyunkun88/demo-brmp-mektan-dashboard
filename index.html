@@ -37,8 +37,8 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-6">
-                <div class="text-right">
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden sm:block">
                     <div id="live-clock" class="text-sm font-mono font-semibold text-green-400">00:00:00</div>
                     <div id="live-date" class="text-xs text-gray-400">01/01/2026</div>
                 </div>
@@ -48,79 +48,17 @@
                     <span id="status-text" class="text-xs font-medium text-gray-300">Terputus</span>
                 </div>
 
-                <button id="btn-disconnect" onclick="disconnectMQTT()" class="hidden items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20">
-                    <i data-lucide="power" class="w-3.5 h-3.5"></i> Putuskan
+                <!-- TOMBOL MENU SETTINGS (RODA GIGI) -->
+                <button onclick="toggleSettingsModal(true)" class="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl border border-gray-700 transition-all">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- CONTAINER UTAMA -->
+    <!-- CONTAINER UTAMA (LANGSUNG TAMPIL DENGAN AUTO-CONNECT) -->
     <main class="max-w-7xl mx-auto px-4 py-8 w-full flex-grow">
-
-        <!-- FORM KONEKSI MQTT -->
-        <div id="auth-card" class="max-w-xl mx-auto bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
-            <div class="mb-6 flex items-center gap-3">
-                <div class="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
-                    <i data-lucide="shield-check" class="w-6 h-6"></i>
-                </div>
-                <div>
-                    <h2 class="text-lg font-bold text-white">Koneksi Broker MQTT</h2>
-                    <p class="text-xs text-gray-400">Masukkan kredensial HiveMQ Cloud WebSocket</p>
-                </div>
-            </div>
-
-            <form onsubmit="event.preventDefault(); connectMQTT();" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-medium text-gray-300 mb-1">Broker Hostname</label>
-                    <input type="text" id="broker-url" required value="a8ec7c7188494f8db03295616f3f4dbf.s1.eu.hivemq.cloud"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-300 mb-1">Port (WSS)</label>
-                        <input type="number" id="broker-port" value="8884" readonly
-                            class="w-full bg-gray-800/50 text-green-400 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono cursor-not-allowed">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-300 mb-1">Client ID</label>
-                        <input type="text" id="client-id" required value="WEB_Dashboard_GH03"
-                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-300 mb-1">Username</label>
-                        <input type="text" id="username" required value="Ondokun32-cicurug"
-                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-300 mb-1">Password</label>
-                        <input type="password" id="password" required value="BRMPc1curu9"
-                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-medium text-gray-300 mb-1">Topic Telemetri Sensor</label>
-                    <input type="text" id="topic" required value="KP_Cicurug/GH03"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none">
-                </div>
-
-                <div id="auth-error" class="hidden text-xs text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg"></div>
-
-                <button type="submit" id="btn-connect"
-                    class="w-full py-2.5 px-4 bg-green-600 hover:bg-green-500 text-white font-medium text-sm rounded-lg transition-all flex items-center justify-center gap-2">
-                    <span id="btn-connect-text">Hubungkan ke Broker</span>
-                    <i id="btn-connect-spinner" data-lucide="loader-2" class="w-4 h-4 animate-spin hidden"></i>
-                </button>
-            </form>
-        </div>
-
-        <!-- TAMPILAN UTAMA DASHBOARD -->
-        <div id="dashboard-content" class="hidden space-y-6">
+        <div id="dashboard-content" class="space-y-6">
 
             <!-- CONTROL PANEL -->
             <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg space-y-4">
@@ -276,6 +214,66 @@
         </div>
     </main>
 
+    <!-- MODAL POPUP MENU SETTINGS (TERSEMBUNYI SECARA DEFAULT) -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+                <div class="flex items-center gap-2 text-white font-bold">
+                    <i data-lucide="settings" class="w-5 h-5 text-green-400"></i>
+                    <h3>Pengaturan Koneksi MQTT</h3>
+                </div>
+                <button onclick="toggleSettingsModal(false)" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="event.preventDefault(); saveAndConnectMQTT();" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Broker Hostname</label>
+                    <input type="text" id="broker-url" required value="a8ec7c7188494f8db03295616f3f4dbf.s1.eu.hivemq.cloud"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Port (WSS)</label>
+                        <input type="number" id="broker-port" value="8884" readonly
+                            class="w-full bg-gray-800/50 text-green-400 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Client ID</label>
+                        <input type="text" id="client-id" required value="WEB_Dashboard_GH03"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Username</label>
+                        <input type="text" id="username" required value="Ondokun32-cicurug"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Password</label>
+                        <input type="password" id="password" required value="BRMPc1curu9"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Topic Telemetri Sensor</label>
+                    <input type="text" id="topic" required value="KP_Cicurug/GH03"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="toggleSettingsModal(false)" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-xs font-medium rounded-lg">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg">Simpan & Hubungkan Ulang</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <footer class="border-t border-gray-800 bg-gray-900 py-4 text-center text-xs text-gray-500">
         &copy; 2026 BRMP Mektan - Smart Irrigation System
     </footer>
@@ -290,12 +288,19 @@
         let chartHum = null;
         let activeMode = 'AUTO_SENSOR';
 
-        // Update Live Clock
+        // Clock Update
         setInterval(() => {
             const now = new Date();
             document.getElementById('live-clock').innerText = now.toLocaleTimeString('id-ID');
             document.getElementById('live-date').innerText = now.toLocaleDateString('id-ID');
         }, 1000);
+
+        // Toggle Settings Modal
+        function toggleSettingsModal(show) {
+            const modal = document.getElementById('settings-modal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
 
         // Database Lokal (IndexedDB)
         function initDB() {
@@ -368,18 +373,21 @@
         }
         initCharts();
 
-        // KONEKSI MQTT
+        // AUTO CONNECT MQTT SETELAH HALAMAN DI-LOAD
         function connectMQTT() {
             const host = document.getElementById('broker-url').value.trim();
             const port = 8884;
-            const clientId = document.getElementById('client-id').value.trim();
+            const clientId = document.getElementById('client-id').value.trim() + "_" + Math.random().toString(16).substr(2, 4);
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value.trim();
             const topicSub = document.getElementById('topic').value.trim();
 
-            document.getElementById('auth-error').classList.add('hidden');
-            document.getElementById('btn-connect-text').innerText = "Connecting...";
-            document.getElementById('btn-connect-spinner').classList.remove('hidden');
+            if (mqttClient) {
+                mqttClient.end();
+            }
+
+            document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-yellow-500 animate-ping";
+            document.getElementById('status-text').innerText = "Menghubungkan...";
 
             const connectUrl = `wss://${host}:${port}/mqtt`;
 
@@ -389,18 +397,13 @@
                 password: password,
                 clean: true,
                 connectTimeout: 5000,
-                reconnectPeriod: 0
+                reconnectPeriod: 3000
             });
 
             mqttClient.on('connect', () => {
                 document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
                 document.getElementById('status-text').innerText = "Connected";
-                document.getElementById('auth-card').classList.add('hidden');
-                document.getElementById('dashboard-content').classList.remove('hidden');
-                document.getElementById('btn-disconnect').classList.remove('hidden');
-                document.getElementById('btn-disconnect').classList.add('flex');
 
-                // Subscribe topik sensor & status feedback
                 mqttClient.subscribe(topicSub);
                 mqttClient.subscribe("esp32/irrigation/control");
                 mqttClient.subscribe("esp32/irrigation/status");
@@ -409,8 +412,8 @@
             });
 
             mqttClient.on('error', (err) => {
-                showError("Gagal Koneksi: " + (err.message || "Kredensial Salah"));
-                mqttClient.end();
+                document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-red-500";
+                document.getElementById('status-text').innerText = "Error Koneksi";
             });
 
             mqttClient.on('message', (topic, message) => {
@@ -419,10 +422,9 @@
                     console.log("MQTT Received:", rawStr);
                     const data = JSON.parse(rawStr);
 
-                    // A. INDIKATOR METRICS DEVICE ONLINE / OFFLINE (LWT Detection)
                     if (data.device_status === "OFFLINE") {
                         document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-ping";
-                        document.getElementById('status-text').innerText = "Device Offline (ESP32 Mati)";
+                        document.getElementById('status-text').innerText = "Device Offline";
                         setPumpStatus(false);
                         return;
                     } else if (data.device_status === "ONLINE") {
@@ -430,14 +432,12 @@
                         document.getElementById('status-text').innerText = "Connected";
                     }
 
-                    // B. SINKRONISASI REALTIME STATUS VALVE / POMPA
                     const valveState = data.status_valve ?? data.valve ?? data.relay ?? data.PUMP ?? data.pump ?? data.status_pompa;
                     if (valveState !== undefined) {
                         const isActive = (valveState === 1 || valveState === "1" || valveState === true || valveState === "ON" || valveState === "on");
                         setPumpStatus(isActive);
                     }
 
-                    // C. TELEMETRI SENSOR SUHU & KELEMBABAN
                     const temp = parseFloat(data.temp2 ?? data.Suhu ?? data.suhu ?? data.temp ?? data.temperature ?? 0);
                     const hum = parseFloat(data.hum2 ?? data.Kelembaban ?? data.kelembaban ?? data.hum ?? data.humidity ?? 0);
 
@@ -450,43 +450,25 @@
 
                         const label = new Date().toLocaleTimeString('id-ID');
                         
-                        // Update Grafik Suhu
                         chartTemp.data.labels.push(label);
                         chartTemp.data.datasets[0].data.push(temp);
                         if (chartTemp.data.labels.length > 30) { chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); }
                         chartTemp.update();
 
-                        // Update Grafik Kelembaban
                         chartHum.data.labels.push(label);
                         chartHum.data.datasets[0].data.push(hum);
                         if (chartHum.data.labels.length > 30) { chartHum.data.labels.shift(); chartHum.data.datasets[0].data.shift(); }
                         chartHum.update();
 
-                        // Simpan Datalogger
                         saveToDB({ timestamp: timeStr, suhu: temp.toFixed(2), kelembaban: hum.toFixed(2) });
                     }
                 } catch (e) { console.error("Error Parsing JSON:", e); }
             });
         }
 
-        function showError(msg) {
-            document.getElementById('auth-error').innerText = msg;
-            document.getElementById('auth-error').classList.remove('hidden');
-            document.getElementById('btn-connect-text').innerText = "Hubungkan ke Broker";
-            document.getElementById('btn-connect-spinner').classList.add('hidden');
-        }
-
-        function disconnectMQTT() {
-            if (mqttClient) {
-                mqttClient.end();
-                document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-red-500";
-                document.getElementById('status-text').innerText = "Terputus";
-                document.getElementById('dashboard-content').classList.add('hidden');
-                document.getElementById('auth-card').classList.remove('hidden');
-                document.getElementById('btn-disconnect').classList.add('hidden');
-                document.getElementById('btn-connect-text').innerText = "Hubungkan ke Broker";
-                document.getElementById('btn-connect-spinner').classList.add('hidden');
-            }
+        function saveAndConnectMQTT() {
+            toggleSettingsModal(false);
+            connectMQTT();
         }
 
         function setPumpStatus(isOn) {
@@ -568,6 +550,11 @@
                 alert("Perintah Reset Terkirim! Pompa Mati & Auto Mode Nonaktif.");
             }
         }
+
+        // OTOMATIS RUNNING KONEKSI MQTT SAAT LAMAN DIBUKA
+        window.addEventListener('DOMContentLoaded', () => {
+            connectMQTT();
+        });
     </script>
 </body>
 </html>
