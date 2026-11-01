@@ -420,6 +420,7 @@
                 try {
                     const data = JSON.parse(message.toString());
 
+                    // 1. Cek Status Device Online / Offline
                     if (data.device_status === "OFFLINE" || data.status === "OFFLINE") {
                         document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-ping";
                         document.getElementById('status-text').innerText = "Device Offline";
@@ -430,44 +431,51 @@
                         document.getElementById('status-text').innerText = "Connected";
                     }
 
-                    // Status Valve/Relay
+                    // 2. Parsing Status Aktuator Valve/Relay
                     const valveState = data.relay ?? data.status_valve ?? data.valve ?? data.pump;
                     if (valveState !== undefined) {
                         setPumpStatus(valveState === 1 || valveState === "1" || valveState === true || valveState === "ON");
                     }
 
-                    // Parsing Sensor CWT (Soil) & RS485 (Suhu & Kelembaban Udara)
-                    const soilHum = parseFloat(data.soil_hum ?? data.hum ?? data.Kelembaban ?? 0);
-                    const temp = parseFloat(data.temp ?? data.suhu ?? data.Suhu ?? 0);
-                    const envHum = parseFloat(data.env_hum ?? data.hum2 ?? 0);
+                    // 3. PARSING DATA SENSOR (TIDAK TERBALIK & HANDLING NILAI KOSONG)
+                    // Kelembaban Tanah CWT
+                    const soilHum = parseFloat(data.soil_hum ?? data.SoilHum ?? data.soil_moisture ?? data.soil ?? 0);
+                    
+                    // Suhu Udara RS485 XY-MD02
+                    const temp = parseFloat(data.temp ?? data.currentTemp ?? data.temp_env ?? data.suhu ?? data.Suhu ?? 0);
+                    
+                    // Kelembaban Udara RS485 XY-MD02
+                    const envHum = parseFloat(data.env_hum ?? data.currentEnvHum ?? data.hum_env ?? data.kelembaban ?? data.hum2 ?? 0);
 
+                    // Update UI Teks
                     document.getElementById('val-soil-hum').innerText = soilHum.toFixed(2);
                     document.getElementById('val-temp').innerText = temp.toFixed(2);
-                    document.getElementById('val-env-hum').innerText = envHum.toFixed(2);
+                    document.getElementById('val-env-hum').innerText = envHum.innerText = envHum.toFixed(2);
 
                     const timeStr = `${new Date().toLocaleTimeString('id-ID')}, ${new Date().toLocaleDateString('id-ID')}`;
                     document.getElementById('last-update').innerText = timeStr;
 
                     const label = new Date().toLocaleTimeString('id-ID');
                     
-                    // Update Chart Soil Hum
+                    // Update Chart Soil Moisture (CWT)
                     chartSoilHum.data.labels.push(label);
                     chartSoilHum.data.datasets[0].data.push(soilHum);
                     if (chartSoilHum.data.labels.length > 30) { chartSoilHum.data.labels.shift(); chartSoilHum.data.datasets[0].data.shift(); }
                     chartSoilHum.update();
 
-                    // Update Chart Temp
+                    // Update Chart Suhu Udara (RS485)
                     chartTemp.data.labels.push(label);
                     chartTemp.data.datasets[0].data.push(temp);
                     if (chartTemp.data.labels.length > 30) { chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); }
                     chartTemp.update();
 
-                    // Update Chart Env Hum
+                    // Update Chart Kelembaban Udara (RS485)
                     chartEnvHum.data.labels.push(label);
                     chartEnvHum.data.datasets[0].data.push(envHum);
                     if (chartEnvHum.data.labels.length > 30) { chartEnvHum.data.labels.shift(); chartEnvHum.data.datasets[0].data.shift(); }
                     chartEnvHum.update();
 
+                    // Simpan ke IndexedDB
                     saveToDB({ timestamp: timeStr, soil_hum: soilHum.toFixed(2), suhu: temp.toFixed(2), env_hum: envHum.toFixed(2) });
 
                 } catch (e) { console.error("Error Parsing JSON:", e); }
