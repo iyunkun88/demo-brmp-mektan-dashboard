@@ -275,7 +275,7 @@
         &copy; 2026 BRMP Mektan - Smart Irrigation System
     </footer>
 
-    <!-- SCRIPT REALTIME DATA & CONTROL (ADAPTED FOR ESP32 C++ FIRMWARE) -->
+    <!-- SCRIPT REALTIME DATA & CONTROL -->
     <script>
         lucide.createIcons();
 
@@ -346,7 +346,7 @@
             tx.objectStore("telemetry").getAll().onsuccess = (e) => {
                 const logs = e.target.result;
                 if (!logs.length) return alert("Database kosong!");
-                let csv = "data:text/csv;charset=utf-8,Waktu,Suhu,Kelembaban Tanah\n";
+                let csv = "data:text/csv;charset=utf-8,Waktu,Suhu,Kelembaban\n";
                 logs.forEach(l => { csv += `"${l.timestamp}",${l.suhu},${l.kelembaban}\n`; });
                 const a = document.createElement("a");
                 a.href = encodeURI(csv);
@@ -401,7 +401,6 @@
                 document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
                 document.getElementById('status-text').innerText = "Connected";
 
-                // Subscribe ke Topik Telemetri Utama & Topik Status/Control ESP32
                 mqttClient.subscribe(topicSub);
                 mqttClient.subscribe("esp32/irrigation/control");
                 mqttClient.subscribe("esp32/irrigation/status");
@@ -417,30 +416,27 @@
             mqttClient.on('message', (topic, message) => {
                 try {
                     const rawStr = message.toString();
-                    console.log("MQTT Received [" + topic + "]:", rawStr);
+                    console.log("MQTT Received:", rawStr);
                     const data = JSON.parse(rawStr);
 
-                    // 1. Cek Status Device Online / Offline
-                    if (data.device_status === "OFFLINE" || data.status === "OFFLINE") {
+                    if (data.device_status === "OFFLINE") {
                         document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-ping";
                         document.getElementById('status-text').innerText = "Device Offline";
                         setPumpStatus(false);
                         return;
-                    } else if (data.device_status === "ONLINE" || data.status === "ONLINE") {
+                    } else if (data.device_status === "ONLINE") {
                         document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
                         document.getElementById('status-text').innerText = "Connected";
                     }
 
-                    // 2. Parsing Status Aktuator Valve / Kontaktor
-                    const valveState = data.relay ?? data.status_valve ?? data.valve ?? data.pump ?? data.status_pompa;
+                    const valveState = data.status_valve ?? data.valve ?? data.relay ?? data.PUMP ?? data.pump ?? data.status_pompa;
                     if (valveState !== undefined) {
                         const isActive = (valveState === 1 || valveState === "1" || valveState === true || valveState === "ON" || valveState === "on");
                         setPumpStatus(isActive);
                     }
 
-                    // 3. Parsing Nilai Sensor CWT (Soil Hum) & RS485 (Temp Env)
-                    const temp = parseFloat(data.temp ?? data.temp2 ?? data.Suhu ?? data.suhu ?? data.temperature ?? 0);
-                    const hum = parseFloat(data.soil_hum ?? data.hum ?? data.hum2 ?? data.Kelembaban ?? data.kelembaban ?? 0);
+                    const temp = parseFloat(data.temp2 ?? data.Suhu ?? data.suhu ?? data.temp ?? data.temperature ?? 0);
+                    const hum = parseFloat(data.hum2 ?? data.Kelembaban ?? data.kelembaban ?? data.hum ?? data.humidity ?? 0);
 
                     if (temp > 0 || hum > 0) {
                         document.getElementById('val-temp').innerText = temp.toFixed(2);
@@ -523,35 +519,30 @@
             }
         }
 
-        // FUNGSI SEND PUBLISH SANGAT SESUAI DENGAN MODUL ESP32
         function publishIrrigationControl() {
             if (!mqttClient) return alert("MQTT Terputus!");
-            let payload = { mode: activeMode, auto_mode: true };
-            
+            let payload = { mode: activeMode };
             if (activeMode === 'AUTO_SENSOR') {
                 payload.temp_max = parseFloat(document.getElementById('cfg-temp-max').value);
                 payload.hum_min = parseFloat(document.getElementById('cfg-hum-min').value);
-                payload.sub_mode = 0; // Sensor Mode
             } else if (activeMode === 'AUTO_TIMER') {
                 payload.time_start = document.getElementById('cfg-time-start').value;
                 payload.time_end = document.getElementById('cfg-time-end').value;
-                payload.sub_mode = 1; // Timer Mode
             }
-            
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
             alert("Parameter Irigasi Terkirim ke ESP32!");
         }
 
         function sendManualCommand(state) {
             if (!mqttClient) return alert("MQTT Terputus!");
-            const payload = { mode: "MANUAL", auto_mode: false, relay: state ? 1 : 0 };
+            const payload = { mode: "MANUAL", relay: state ? 1 : 0 };
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
         }
 
         function sendResetSystem() {
             if (!mqttClient) return alert("MQTT Terputus!");
             if (confirm("Apakah Anda yakin ingin MEMATIKAN POMPA & MENONAKTIFKAN SELURUH FITUR OTOMATIS?")) {
-                const payload = { mode: "MANUAL", auto_mode: false, relay: 0, reset: true };
+                const payload = { mode: "MANUAL", relay: 0, reset: true };
                 mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
                 alert("Perintah Reset Terkirim! Pompa Mati & Auto Mode Nonaktif.");
             }
