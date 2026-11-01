@@ -134,7 +134,7 @@
                     <p id="pump-subtext" class="text-xs text-gray-500 mt-3 font-mono">Pompa / Valve Siaga</p>
                 </div>
 
-                <!-- 2. KELEMBABAN TANAH (SOIL CWT - UTAMA UNTUK IRIGASI) -->
+                <!-- 2. KELEMBABAN TANAH (UTAMA UNTUK IRIGASI) -->
                 <div class="bg-gray-900 border border-green-500/30 rounded-2xl p-6 shadow-lg">
                     <div class="flex justify-between items-start mb-4">
                         <div>
@@ -151,11 +151,11 @@
                     <div class="h-28 w-full"><canvas id="chartSoilHum"></canvas></div>
                 </div>
 
-                <!-- 3. SUHU LINGKUNGAN (RS485 - MONITORING) -->
+                <!-- 3. SUHU LINGKUNGAN -->
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg">
                     <div class="flex justify-between items-start mb-4">
                         <div>
-                            <span class="text-xs font-medium text-orange-400 bg-orange-400/10 px-2.5 py-1 rounded-full border border-orange-400/20">Suhu Udara (RS485)</span>
+                            <span class="text-xs font-medium text-orange-400 bg-orange-400/10 px-2.5 py-1 rounded-full border border-orange-400/20">Suhu Udara</span>
                             <div class="mt-3 flex items-baseline gap-2">
                                 <span id="val-temp" class="text-4xl font-bold text-white">0.00</span>
                                 <span class="text-xl text-gray-400">°C</span>
@@ -168,11 +168,11 @@
                     <div class="h-28 w-full"><canvas id="chartTemp"></canvas></div>
                 </div>
 
-                <!-- 4. KELEMBABAN UDARA (RS485 - MONITORING) -->
+                <!-- 4. KELEMBABAN UDARA -->
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg">
                     <div class="flex justify-between items-start mb-4">
                         <div>
-                            <span class="text-xs font-medium text-blue-400 bg-blue-400/10 px-2.5 py-1 rounded-full border border-blue-400/20">Kelembaban Udara (RS485)</span>
+                            <span class="text-xs font-medium text-blue-400 bg-blue-400/10 px-2.5 py-1 rounded-full border border-blue-400/20">Kelembaban Udara</span>
                             <div class="mt-3 flex items-baseline gap-2">
                                 <span id="val-env-hum" class="text-4xl font-bold text-white">0.00</span>
                                 <span class="text-xl text-gray-400">%</span>
@@ -438,13 +438,13 @@
                     }
 
                     // 3. PARSING DATA SENSOR (TIDAK TERBALIK & HANDLING NILAI KOSONG)
-                    // Kelembaban Tanah CWT
+                    // Kelembaban Tanah
                     const soilHum = parseFloat(data.soil_hum ?? data.SoilHum ?? data.soil_moisture ?? data.soil ?? 0);
                     
-                    // Suhu Udara RS485 XY-MD02
+                    // Suhu Udara
                     const temp = parseFloat(data.temp ?? data.currentTemp ?? data.temp_env ?? data.suhu ?? data.Suhu ?? 0);
                     
-                    // Kelembaban Udara RS485 XY-MD02
+                    // Kelembaban Udara
                     const envHum = parseFloat(data.env_hum ?? data.currentEnvHum ?? data.hum_env ?? data.kelembaban ?? data.hum2 ?? 0);
 
                     // Update UI Teks
@@ -457,19 +457,19 @@
 
                     const label = new Date().toLocaleTimeString('id-ID');
                     
-                    // Update Chart Soil Moisture (CWT)
+                    // Update Chart Soil Moisture
                     chartSoilHum.data.labels.push(label);
                     chartSoilHum.data.datasets[0].data.push(soilHum);
                     if (chartSoilHum.data.labels.length > 30) { chartSoilHum.data.labels.shift(); chartSoilHum.data.datasets[0].data.shift(); }
                     chartSoilHum.update();
 
-                    // Update Chart Suhu Udara (RS485)
+                    // Update Chart Suhu Udara
                     chartTemp.data.labels.push(label);
                     chartTemp.data.datasets[0].data.push(temp);
                     if (chartTemp.data.labels.length > 30) { chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); }
                     chartTemp.update();
 
-                    // Update Chart Kelembaban Udara (RS485)
+                    // Update Chart Kelembaban Udara
                     chartEnvHum.data.labels.push(label);
                     chartEnvHum.data.datasets[0].data.push(envHum);
                     if (chartEnvHum.data.labels.length > 30) { chartEnvHum.data.labels.shift(); chartEnvHum.data.datasets[0].data.shift(); }
