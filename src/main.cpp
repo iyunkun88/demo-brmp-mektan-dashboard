@@ -57,17 +57,15 @@ float humThreshold = 60.0; // Threshold Kelembaban Tanah (%) dari Web Dashboard
 int startHour = 7,  startMinute = 0;
 int stopHour  = 7,  stopMinute  = 15;
 
-float currentTemp = 0.0; // Monitoring Only (RS485)
-float currentHum  = 0.0; // Soil Moisture Sensor CWT Analog
-float currentEnvHum = 0.0; // Deklarasi variabel kelembaban lingkungan RS485
+float currentTemp   = 0.0; // Monitoring Only (RS485)
+float currentHum    = 0.0; // Soil Moisture Sensor CWT Analog
+float currentEnvHum = 0.0; // Kelembaban lingkungan RS485
 
 unsigned long previousSensorMillis = 0;
 unsigned long lastDisplayUpdate    = 0;
 unsigned long lastNetworkCheck     = 0;
 
-bool lastOptoState = HIGH;
-
-// ==================== RS485 FUNCTIONS (MONITORING ONLY) ====================
+// ==================== RS485 FUNCTIONS ====================
 void preTransmission()  { digitalWrite(RTS_PIN, HIGH); }
 void postTransmission() { digitalWrite(RTS_PIN, LOW);  }
 
@@ -99,11 +97,10 @@ float ReadXYMD02(uint8_t slaveID, uint16_t REG) {
   return 0.0;
 }
 
-// ==================== PEMBACAAN SENSOR ANALOG CWT (KENDALI UTAMA) ====================
+// ==================== PEMBACAAN SENSOR ANALOG CWT ====================
 float readCWTSoilHumidity() {
   analogSetPinAttenuation(SOIL_HUM_PIN, ADC_11db);
   
-  // 1. Sampling 30x untuk meredam noise ADC ESP32
   long sumADC = 0;
   for (int i = 0; i < 30; i++) {
     sumADC += analogRead(SOIL_HUM_PIN);
@@ -111,28 +108,19 @@ float readCWTSoilHumidity() {
   }
   int rawADC = sumADC / 30;
 
-  // 2. Kalkulasi Tegangan Pin & Rekonstruksi Sinyal Sensor
   float vOut = (rawADC / 4095.0) * 3.3; 
   float vSensor = vOut * 1.5; 
   
-  // ================= PARAMETER KALIBRASI BARU =================
-  // vDry diturunkan ke 0.30V agar tanah kering terbaca di kisaran 10% - 15%
-  float vDry = 0.30; // Batas Bawah (Murni Kering Oven)
-  float vWet = 0.80; // Batas Atas (Basah Maksimal Jenuh Air)
+  float vDry = 0.30; // Batas Bawah
+  float vWet = 0.80; // Batas Atas
 
-  // 3. Hitung persentase kelembaban
   float rawHumidity = ((vSensor - vDry) / (vWet - vDry)) * 100.0;
   
-  // Clamping Rentang 0 - 100%
   if (rawHumidity > 100.0) rawHumidity = 100.0;
   if (rawHumidity < 0.0)   rawHumidity = 0.0;
 
-  // 4. Exponential Moving Average (EMA Filter) agar pergerakan angka halus
-  static float filteredHumidity = 10.0; // Default diinisialisasi 10%
+  static float filteredHumidity = 10.0;
   filteredHumidity = (filteredHumidity * 0.7) + (rawHumidity * 0.3);
-
-  //Serial.printf("[DEBUG] rawADC: %d | vPin: %.3fV | vSensor: %.3fV | SoilHum: %.2f%%\n", 
-                //rawADC, vOut, vSensor, filteredHumidity);
 
   return filteredHumidity;
 }
@@ -141,8 +129,6 @@ float readCWTSoilHumidity() {
 void setRelay(bool newState, String triggerSource) {
   if (relayState != newState) {
     relayState = newState;
-    
-    // Kontrol Relay Kontaktor
     digitalWrite(RELAY_PIN, relayState ? HIGH : LOW);
     
     Serial.print("[RELAY] Status Berubah -> ");
@@ -150,7 +136,6 @@ void setRelay(bool newState, String triggerSource) {
     Serial.print(" | Trigger: ");
     Serial.println(triggerSource);
     
-    // Kirim Feedback Status Realtime ke Web Dashboard
     if (WiFi.status() == WL_CONNECTED && client.connected()) {
       StaticJsonDocument<128> docStatus;
       docStatus["relay"]  = relayState ? 1 : 0;
@@ -204,15 +189,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       return;
     }
 
-    // 2. Kontrol Relay Manual dari Web
-    if (doc.containsKey("relay")) {
-      autoMode = false;
-      int rState = doc["relay"];
-      setRelay(rState == 1, "Web_Manual_JSON");
-      return;
-    }
-
-    // 3. Switch Mode (MANUAL / AUTO_SENSOR / AUTO_TIMER)
+    // 2. Switch Mode (MANUAL / AUTO_SENSOR / AUTO_TIMER)
     if (doc.containsKey("mode")) {
       String modeStr = doc["mode"].as<String>();
       if (modeStr == "AUTO_SENSOR") { autoMode = true; autoSubMode = 0; }
@@ -220,7 +197,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       else if (modeStr == "MANUAL") { autoMode = false; }
     }
 
-    // 4. Parameter Auto Sensor (Hanya Mengambil Parameter Kelembaban dari Web)
+    // 3. Kontrol Relay Manual dari Web (Hanya jika mode MANUAL)
+    if (!autoMode && doc.containsKey("relay")) {
+      int rState = doc["relay"];
+      setRelay(rState == 1, "Web_Manual_JSON");
+      return;
+    }
+
+    // 4. Parameter Auto Sensor
     if (doc.containsKey("hum_min"))   humThreshold = doc["hum_min"].as<float>();
     if (doc.containsKey("hum_limit")) humThreshold = doc["hum_limit"].as<float>();
 
@@ -283,11 +267,10 @@ void handleNetwork() {
 
 // ==================== SETUP ====================
 void setup() {
-  digitalWrite(RELAY_PIN, LOW); 
+  // Pengaman Awal Relay Kontaktor
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
-  
-  relayState = false; //
+  digitalWrite(RELAY_PIN, LOW); 
+  relayState = false;
 
   pinMode(LED_WIFI_PIN, OUTPUT);
   digitalWrite(LED_WIFI_PIN, LOW);
@@ -320,21 +303,17 @@ void setup() {
 
 // ==================== MAIN LOOP ====================
 void loop() {
-  // 1. Kelola Network secara Non-Blocking
+  // 1. Kelola Network
   handleNetwork();
 
   digitalWrite(LED_WIFI_PIN, (WiFi.status() == WL_CONNECTED) ? HIGH : LOW);
 
-  // ==================== BACA 1 TOMBOL MANUAL (OFFLINE ONLY) ====================
+  // 2. Baca 1 Tombol Manual (OFFLINE ONLY)
   if (WiFi.status() != WL_CONNECTED) {
-    
-    // Optocoupler Active-LOW: LOW saat tombol ditekan (220V masuk)
     bool currentBtnState = digitalRead(OPTO_PIN); 
-    
     static bool lastBtnState = HIGH;
     static unsigned long lastDebounceTime = 0;
 
-    // Filter Debounce 50ms untuk meredam noise fisik tombol
     if (currentBtnState != lastBtnState) {
       lastDebounceTime = millis();
     }
@@ -342,14 +321,9 @@ void loop() {
     if ((millis() - lastDebounceTime) > 50) {
       static bool buttonHandled = false;
 
-      // Terdeteksi TEKANAN BARU (Transition HIGH -> LOW)
       if (currentBtnState == LOW && !buttonHandled) {
         buttonHandled = true;
-        
-        // 1. Matikan mode Auto
         autoMode = false; 
-
-        // 2. Toggle status kontaktor (Balikkan nilai: ON jadi OFF, OFF jadi ON)
         relayState = !relayState; 
         digitalWrite(RELAY_PIN, relayState ? HIGH : LOW);
 
@@ -359,7 +333,6 @@ void loop() {
           Serial.println("[MANUAL SWITCH] Tombol Ditekan -> Kontaktor OFF!");
         }
       } 
-      // Saat tombol dilepas
       else if (currentBtnState == HIGH) {
         buttonHandled = false;
       }
@@ -372,12 +345,9 @@ void loop() {
   if (currentMillis - previousSensorMillis >= 5000) {
     previousSensorMillis = currentMillis;
 
-    // Read Temp RS485 (HANYA UNTUK MONITORING)
     currentTemp   = ReadXYMD02(SLAVE_SENSOR_2, REG_TEMP);
     currentEnvHum = ReadXYMD02(SLAVE_SENSOR_2, REG_HUM);
-    
-    // Read Soil Humidity CWT Analog (KENDALI UTAMA RELAY)
-    currentHum = readCWTSoilHumidity();
+    currentHum    = readCWTSoilHumidity();
 
     Serial.print("Temp Lingkungan: ");
     Serial.print(currentTemp);
@@ -397,13 +367,12 @@ void loop() {
 
       char buffer[256];
       serializeJson(doc, buffer);
-      client.publish("KP_Cicurug/GH03", buffer);
+      client.publish(mqtt_topic_pub, buffer);
     }
 
-    // Evaluasi Auto Mode (KENDALI SEPENUHNYA OLEH SOIL SENSOR CWT)
+    // Evaluasi Auto Mode
     if (autoMode) {
       if (autoSubMode == 0) { 
-        // Jika kelembaban tanah KURANG DARI ATAU SAMA DENGAN Threshold dari Web Dashboard -> RELAY ON
         if (currentHum <= humThreshold) {
           setRelay(true, "Auto_SoilSensor");
         } else {
@@ -411,7 +380,6 @@ void loop() {
         }
       } 
       else if (autoSubMode == 1) { 
-        // Auto Timer Jam
         if (checkTimerMatch()) {
           setRelay(true, "Auto_Timer");
         } else {
@@ -421,62 +389,50 @@ void loop() {
     }
   }
 
-  // ==================== 4. UPDATE LCD 20X4 (BERGANTIAN HALAMAN) ====================
+  // 4. Update LCD 20X4
   static unsigned long lastPageSwitch = 0;
-  static int lcdPage = 1; // 1: Hal Utama (5 detik), 2: Hal Lingkungan (2 detik)
-  
-  // Tentukan durasi berdasarkan halaman aktif (Halaman 1 = 5s, Halaman 2 = 2s)
+  static int lcdPage = 1; 
   unsigned long pageDuration = (lcdPage == 1) ? 5000 : 2000;
 
-  // Cek pewaktuan perpindahan halaman
   if (millis() - lastPageSwitch >= pageDuration) {
     lastPageSwitch = millis();
-    lcdPage = (lcdPage == 1) ? 2 : 1; // Alternasi Halaman 1 <-> 2
-    lcd.clear(); // Bersihkan layar setiap kali berganti halaman
+    lcdPage = (lcdPage == 1) ? 2 : 1; 
+    lcd.clear(); 
   }
 
-  // --- HALAMAN 1: MONITOR UTAMA (TAMPIL 5 DETIK) ---
   if (lcdPage == 1) {
-    // Baris 1: Status WiFi
     lcd.setCursor(0, 0);
     lcd.print("Status:");
-    lcd.print(WiFi.status() == WL_CONNECTED ? "ONLINE" : "OFFLINE");
+    lcd.print(WiFi.status() == WL_CONNECTED ? "ONLINE " : "OFFLINE");
 
-    // Baris 2: Kelembaban Tanah CWT
     lcd.setCursor(0, 1);
     lcd.print("Soil Moist:");
     if (currentHum < 10.0) lcd.print(" ");
     lcd.print(currentHum, 1);
     lcd.print("%");
 
-    // Baris 3: Status Valve / Kontaktor
     lcd.setCursor(0, 2);
     lcd.print("Valve : ");
-    lcd.print(relayState ? "ON" : "OFF");
+    lcd.print(relayState ? "ON " : "OFF");
 
-    // Baris 4: Informasi Mode Sistem
     lcd.setCursor(0, 3);
     lcd.print("Mode : ");
     lcd.print(!autoMode ? "MANUAL    " : "AUTOMATIC ");
   }
-  // --- HALAMAN 2: SUHU & KELEMBABAN LINGKUNGAN (TAMPIL 2 DETIK) ---
   else {
-    // Baris 1: Suhu Udara RS485
     lcd.setCursor(0, 0);
     lcd.print("Temp : ");
     if (currentTemp < 10.0) lcd.print(" ");
     lcd.print(currentTemp, 1);
-    lcd.print((char)223); // Simbol Derajat C
+    lcd.print((char)223); 
     lcd.print("C   ");
 
-    // Baris 2: Kelembaban Udara RS485
     lcd.setCursor(0, 1);
     lcd.print("Humi : ");
     if (currentEnvHum < 10.0) lcd.print(" ");
-    lcd.print(currentEnvHum, 1); // Variabel kelembaban udara RS485
+    lcd.print(currentEnvHum, 1); 
     lcd.print("%   ");
 
-    // Baris 3 & 4: Kosongkan
     lcd.setCursor(0, 2);
     lcd.print("                    ");
     lcd.setCursor(0, 3);
