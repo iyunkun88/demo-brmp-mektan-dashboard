@@ -76,7 +76,7 @@
                     <div id="panel-auto-sensor" class="space-y-3">
                         <div>
                             <label class="block text-xs font-medium text-gray-300 mb-1">Minimal Kelembaban Tanah Pemicu / Threshold (%)</label>
-                            <input type="number" id="cfg-soil-min" value="15.00" step="1.0" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
+                            <input type="number" id="cfg-soil-min" value="60.00" step="1.0" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-green-500">
                         </div>
                         <button onclick="publishIrrigationControl()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg">Simpan Parameter Soil Sensor</button>
                     </div>
@@ -408,7 +408,7 @@
                 mqttClient.subscribe("esp32/irrigation/control");
                 mqttClient.subscribe("esp32/irrigation/status");
 
-                switchModeUI('AUTO_SENSOR');
+                switchModeUI('AUTO_SENSOR', false); // Tidak publish awal saat baru konek
             });
 
             mqttClient.on('error', () => {
@@ -437,20 +437,21 @@
                         setPumpStatus(valveState === 1 || valveState === "1" || valveState === true || valveState === "ON");
                     }
 
-                    // 3. PARSING DATA SENSOR (TIDAK TERBALIK & HANDLING NILAI KOSONG)
-                    // Kelembaban Tanah
+                    // Synchronize mode dari telemetry/status jika diterima dari ESP32
+                    if (data.mode) {
+                        activeMode = data.mode;
+                        updateModeUIOnly(data.mode);
+                    }
+
+                    // 3. PARSING DATA SENSOR
                     const soilHum = parseFloat(data.soil_hum ?? data.SoilHum ?? data.soil_moisture ?? data.soil ?? 0);
-                    
-                    // Suhu Udara
                     const temp = parseFloat(data.temp ?? data.currentTemp ?? data.temp_env ?? data.suhu ?? data.Suhu ?? 0);
-                    
-                    // Kelembaban Udara
                     const envHum = parseFloat(data.env_hum ?? data.currentEnvHum ?? data.hum_env ?? data.kelembaban ?? data.hum2 ?? 0);
 
                     // Update UI Teks
                     document.getElementById('val-soil-hum').innerText = soilHum.toFixed(2);
                     document.getElementById('val-temp').innerText = temp.toFixed(2);
-                    document.getElementById('val-env-hum').innerText = envHum.innerText = envHum.toFixed(2);
+                    document.getElementById('val-env-hum').innerText = envHum.toFixed(2);
 
                     const timeStr = `${new Date().toLocaleTimeString('id-ID')}, ${new Date().toLocaleDateString('id-ID')}`;
                     document.getElementById('last-update').innerText = timeStr;
@@ -515,9 +516,8 @@
             lucide.createIcons();
         }
 
-        function switchModeUI(mode) {
-            activeMode = mode;
-
+        // Hanya memperbarui warna tombol mode di UI
+        function updateModeUIOnly(mode) {
             document.getElementById('btn-mode-sensor').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
             document.getElementById('btn-mode-timer').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
             document.getElementById('btn-mode-manual').className = "px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white";
@@ -538,33 +538,50 @@
             }
         }
 
+        // Berpindah Mode di UI sekaligus otomatis PUBLISH perintah MQTT ke ESP32
+        function switchModeUI(mode, shouldPublish = true) {
+            activeMode = mode;
+            updateModeUIOnly(mode);
+
+            if (shouldPublish) {
+                publishIrrigationControl();
+            }
+        }
+
+        // Publikasi Perintah Kontrol & Mode ke Topik MQTT
         function publishIrrigationControl() {
-            if (!mqttClient) return alert("MQTT Terputus!");
-            let payload = { mode: activeMode, auto_mode: true };
+            if (!mqttClient || !mqttClient.connected) {
+                return alert("Koneksi MQTT Terputus!");
+            }
+
+            let payload = { mode: activeMode };
             
             if (activeMode === 'AUTO_SENSOR') {
-                payload.soil_hum_min = parseFloat(document.getElementById('cfg-soil-min').value);
-                payload.sub_mode = 0; // Soil Sensor Mode
+                const thresholdVal = parseFloat(document.getElementById('cfg-soil-min').value) || 60;
+                payload.hum_min = thresholdVal;
+                payload.hum_limit = thresholdVal;
+                payload.soil_hum_min = thresholdVal;
+                payload.sub_mode = 0;
             } else if (activeMode === 'AUTO_TIMER') {
                 payload.time_start = document.getElementById('cfg-time-start').value;
                 payload.time_end = document.getElementById('cfg-time-end').value;
-                payload.sub_mode = 1; // Timer Mode
+                payload.sub_mode = 1;
             }
             
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
-            alert("Parameter Soil Sensor Terkirim ke ESP32!");
+            console.log("[MQTT Control Sent]:", payload);
         }
 
         function sendManualCommand(state) {
-            if (!mqttClient) return alert("MQTT Terputus!");
-            const payload = { mode: "MANUAL", auto_mode: false, relay: state ? 1 : 0 };
+            if (!mqttClient || !mqttClient.connected) return alert("Koneksi MQTT Terputus!");
+            const payload = { mode: "MANUAL", relay: state ? 1 : 0 };
             mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
         }
 
         function sendResetSystem() {
-            if (!mqttClient) return alert("MQTT Terputus!");
+            if (!mqttClient || !mqttClient.connected) return alert("Koneksi MQTT Terputus!");
             if (confirm("Apakah Anda yakin ingin MEMATIKAN POMPA & MENONAKTIFKAN SELURUH FITUR OTOMATIS?")) {
-                const payload = { mode: "MANUAL", auto_mode: false, relay: 0, reset: true };
+                const payload = { mode: "MANUAL", relay: 0, reset: true };
                 mqttClient.publish("esp32/irrigation/control", JSON.stringify(payload));
                 alert("Perintah Reset Terkirim! Pompa Mati & Auto Mode Nonaktif.");
             }
